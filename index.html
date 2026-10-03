@@ -361,6 +361,89 @@
       .reward-icon { font-size: 18px; margin-bottom: 3px; }
       .reward-option span { font-size: 10px; }
     }
+    body.landscape-ui .game { position: relative; }
+    body.landscape-ui .canvas-shell {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      padding: 0;
+      border-radius: 14px;
+    }
+    body.landscape-ui canvas {
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+      aspect-ratio: auto;
+    }
+    body.landscape-ui .topbar {
+      position: absolute;
+      top: 6px;
+      left: 8px;
+      right: 8px;
+      z-index: 20;
+      margin: 0;
+      pointer-events: none;
+    }
+    body.landscape-ui .topbar .actions { pointer-events: auto; }
+    body.landscape-ui .brand { pointer-events: none; }
+    body.landscape-ui .hud {
+      position: absolute;
+      top: 46px;
+      left: 8px;
+      right: 8px;
+      z-index: 19;
+      margin: 0;
+      pointer-events: none;
+      opacity: .94;
+    }
+    html.force-landscape-root, body.force-landscape {
+      width: 100%; height: 100%; overflow: hidden; background: #030706;
+    }
+    body.force-landscape .game {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: calc(100dvh - 8px);
+      height: calc(100dvw - 8px);
+      padding: 7px;
+      display: flex;
+      flex-direction: column;
+      border-radius: 14px;
+      transform: translate(-50%, -50%) rotate(90deg);
+      transform-origin: center center;
+    }
+    body.force-landscape .topbar { margin-bottom: 5px; gap: 8px; }
+    body.force-landscape .brand { gap: 7px; }
+    body.force-landscape .brand-mark { width: 34px; height: 34px; font-size: 18px; border-radius: 10px; }
+    body.force-landscape h1 { font-size: 18px; }
+    body.force-landscape .subtitle { display: none; }
+    body.force-landscape .actions { gap: 4px; }
+    body.force-landscape .action { padding: 5px 7px; font-size: 11px; border-radius: 8px; }
+    body.force-landscape .hud { grid-template-columns: minmax(160px, 1.5fr) repeat(4, minmax(58px, .45fr)); gap: 5px; margin-bottom: 5px; }
+    body.force-landscape .hud-card { min-height: 40px; padding: 5px 7px; border-radius: 9px; }
+    body.force-landscape .card-label { font-size: 8px; margin-bottom: 2px; }
+    body.force-landscape .health-track { height: 8px; }
+    body.force-landscape .health-number { font-size: 15px; }
+    body.force-landscape .stat strong { font-size: 16px; }
+    body.force-landscape .canvas-shell { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 4px; }
+    body.force-landscape canvas { width: 100%; height: 100%; max-width: none; max-height: none; aspect-ratio: auto; }
+    body.force-landscape .tips { display: none; }
+    body.force-landscape .joystick { width: 82px; height: 82px; bottom: 8px; }
+    body.force-landscape .joystick.move { left: 10px; }
+    body.force-landscape .joystick.aim { right: 10px; }
+    body.force-landscape .joystick-thumb { width: 36px; height: 36px; margin: -18px; }
+    body.force-landscape .joystick-label { bottom: -18px; font-size: 9px; }
+    body.force-landscape .overlay-card, body.force-landscape .reward-card { max-height: calc(100dvw - 16px); overflow: auto; padding: 13px; }
+    body.force-landscape .overlay h2 { font-size: 26px; }
+    body.force-landscape .overlay p { margin: 7px auto 10px; font-size: 12px; }
+    body.force-landscape .primary, body.force-landscape .secondary { padding: 8px 13px; }
+    body.force-landscape .reward-card h2 { font-size: 22px; }
+    body.force-landscape .reward-card p { margin-bottom: 8px; font-size: 11px; }
+    body.force-landscape .reward-options { grid-template-columns: repeat(3, 1fr); }
+    body.force-landscape .reward-option { min-height: 88px; padding: 8px; }
+    body.force-landscape .reward-icon { font-size: 18px; margin-bottom: 3px; }
+    body.force-landscape .reward-option span { font-size: 10px; }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
     }
@@ -476,6 +559,7 @@
       const fullscreenToggle = document.getElementById('fullscreenToggle');
       const exitModeToggle = document.getElementById('exitModeToggle');
       let exitReturnMode = 'menu';
+      let landscapeAssistRequested = false;
       const healthFill = document.getElementById('healthFill');
       const healthNumber = document.getElementById('healthNumber');
       const waveValue = document.getElementById('waveValue');
@@ -2141,7 +2225,20 @@
       pauseToggle.addEventListener('click', togglePause);
       autoFireToggle.addEventListener('click', toggleAutoFire);
       modeButtons.forEach((button) => button.addEventListener('click', () => chooseMode(button.dataset.mode)));
+      function syncForcedLandscape() {
+        const portrait = matchMedia('(orientation: portrait)').matches;
+        const touch = navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches;
+        const wideViewport = matchMedia('(min-aspect-ratio: 4 / 3)').matches && innerHeight <= 620;
+        const force = landscapeAssistRequested && touch && portrait;
+        document.documentElement.classList.toggle('force-landscape-root', force);
+        document.body.classList.toggle('force-landscape', force);
+        document.body.classList.toggle('landscape-ui', force || wideViewport);
+        fullscreenToggle.textContent = document.body.classList.contains('force-landscape')
+          ? '退出横屏'
+          : document.fullscreenElement ? '退出全屏' : '横屏全屏';
+      }
       async function enterLandscapeFullscreen() {
+        landscapeAssistRequested = true;
         if (navigator.maxTouchPoints <= 0 && !matchMedia('(pointer: coarse)').matches) return;
         try {
           if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
@@ -2151,19 +2248,29 @@
             try { await screen.orientation.lock('landscape'); } catch (_) {}
           }
         } catch (_) {}
-        fullscreenToggle.textContent = document.fullscreenElement ? '退出全屏' : '横屏全屏';
+        window.setTimeout(syncForcedLandscape, 180);
       }
       async function toggleFullscreen() {
+        if (document.body.classList.contains('force-landscape')) {
+          landscapeAssistRequested = false;
+          syncForcedLandscape();
+          if (document.fullscreenElement && document.exitFullscreen) {
+            try { await document.exitFullscreen(); } catch (_) {}
+          }
+          return;
+        }
         try {
           if (!document.fullscreenElement) await enterLandscapeFullscreen();
-          else if (document.exitFullscreen) await document.exitFullscreen();
+          else if (document.exitFullscreen) {
+            landscapeAssistRequested = false;
+            await document.exitFullscreen();
+          }
         } catch (_) {}
-        fullscreenToggle.textContent = document.fullscreenElement ? '退出全屏' : '横屏全屏';
+        syncForcedLandscape();
       }
-      document.addEventListener('fullscreenchange', () => {
-        fullscreenToggle.textContent = document.fullscreenElement ? '退出全屏' : '横屏全屏';
-      });
-      fullscreenToggle.addEventListener('click', toggleFullscreen);
+      document.addEventListener('fullscreenchange', syncForcedLandscape);
+      window.addEventListener('resize', syncForcedLandscape);
+      window.addEventListener('orientationchange', syncForcedLandscape);      fullscreenToggle.addEventListener('click', toggleFullscreen);
       soundToggle.addEventListener('click', () => {
         audio.enabled = !audio.enabled;
         soundToggle.textContent = audio.enabled ? '🔊 音效' : '🔇 静音';
@@ -2181,11 +2288,16 @@
       updateAutoFireButton();
       updateModePicker();
       showMainMenu();
+      syncForcedLandscape();
       requestAnimationFrame(loop);
     })();
   </script>
 </body>
 </html>
+
+
+
+
 
 
 

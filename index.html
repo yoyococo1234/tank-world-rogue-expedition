@@ -2124,6 +2124,11 @@
           const radius = Math.max(18, rect.width / 2 - thumb.offsetWidth / 2 - 4);
           let dx = clientX - (rect.left + rect.width / 2);
           let dy = clientY - (rect.top + rect.height / 2);
+          if (document.body.classList.contains('force-landscape')) {
+            const screenDx = dx;
+            dx = dy;
+            dy = -screenDx;
+          }
           const length = Math.hypot(dx, dy);
           if (length > radius) {
             dx = dx / length * radius;
@@ -2352,6 +2357,7 @@
   </script>
 </body>
 </html>
+
 
 
 

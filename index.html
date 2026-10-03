@@ -321,8 +321,9 @@
       .mode-picker, .reward-options { grid-template-columns: 1fr; }
     }
     @media (pointer: coarse) {
-      .touch-controls { display: block; position: absolute; inset: 0; pointer-events: none; }
-      .joystick { pointer-events: auto; }
+      .touch-controls { display: block; position: absolute; inset: 0; z-index: 4; pointer-events: none; touch-action: none; }
+      .joystick { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+      .joystick-thumb { pointer-events: none; }
       canvas { cursor: default; }
     }
     @media (min-aspect-ratio: 4 / 3) and (max-height: 620px) {
@@ -2114,34 +2115,85 @@
       }
       function setupJoystick(element, callback) {
         const thumb = element.querySelector('.joystick-thumb');
-        const radius = 38;
+
+        let touchId = null;
         let pointerId = null;
-        function update(event) {
+
+        function updateAt(clientX, clientY) {
           const rect = element.getBoundingClientRect();
-          let dx = event.clientX - (rect.left + rect.width / 2);
-          let dy = event.clientY - (rect.top + rect.height / 2);
+          const radius = Math.max(18, rect.width / 2 - thumb.offsetWidth / 2 - 4);
+          let dx = clientX - (rect.left + rect.width / 2);
+          let dy = clientY - (rect.top + rect.height / 2);
           const length = Math.hypot(dx, dy);
-          if (length > radius) { dx = dx / length * radius; dy = dy / length * radius; }
+          if (length > radius) {
+            dx = dx / length * radius;
+            dy = dy / length * radius;
+          }
           thumb.style.transform = `translate(${dx}px, ${dy}px)`;
           callback(dx / radius, dy / radius, true);
         }
-        function end(event) {
-          if (pointerId !== event.pointerId) return;
+
+        function reset() {
+          touchId = null;
           pointerId = null;
           thumb.style.transform = 'translate(0, 0)';
           callback(0, 0, false);
         }
-        element.addEventListener('pointerdown', (event) => {
-          lastInputTouch = true;
-          pointerId = event.pointerId;
-          element.setPointerCapture(pointerId);
-          update(event);
-        });
-        element.addEventListener('pointermove', (event) => { if (pointerId === event.pointerId) update(event); });
-        element.addEventListener('pointerup', end);
-        element.addEventListener('pointercancel', end);
-      }
-      window.addEventListener('keydown', (event) => {
+
+        {
+          element.addEventListener('touchstart', (event) => {
+            event.preventDefault();
+            const touch = event.changedTouches[0];
+            if (!touch) return;
+            lastInputTouch = true;
+            touchId = touch.identifier;
+            updateAt(touch.clientX, touch.clientY);
+          }, { passive: false });
+
+          element.addEventListener('touchmove', (event) => {
+            if (touchId === null) return;
+            event.preventDefault();
+            let touch = null;
+            for (let i = 0; i < event.touches.length; i += 1) {
+              const item = event.touches.item(i);
+              if (item.identifier === touchId) { touch = item; break; }
+            }
+            if (touch) updateAt(touch.clientX, touch.clientY);
+          }, { passive: false });
+
+          element.addEventListener('touchend', (event) => {
+            if (touchId === null) return;
+            let ended = false;
+            for (let i = 0; i < event.changedTouches.length; i += 1) {
+              if (event.changedTouches.item(i).identifier === touchId) { ended = true; break; }
+            }
+            if (ended) reset();
+          }, { passive: false });
+
+          element.addEventListener('touchcancel', reset, { passive: false });
+        }
+        {
+          element.addEventListener('pointerdown', (event) => {
+            if (event.pointerType === 'touch') return;
+            event.preventDefault();
+            lastInputTouch = true;
+            pointerId = event.pointerId;
+            try { element.setPointerCapture(pointerId); } catch (_) {}
+            updateAt(event.clientX, event.clientY);
+          });
+          element.addEventListener('pointermove', (event) => {
+            if (event.pointerType === 'touch' || pointerId !== event.pointerId) return;
+            event.preventDefault();
+            updateAt(event.clientX, event.clientY);
+          });
+          element.addEventListener('pointerup', (event) => {
+            if (pointerId === event.pointerId) reset();
+          });
+          element.addEventListener('pointercancel', (event) => {
+            if (pointerId === event.pointerId) reset();
+          });
+        }
+      }      window.addEventListener('keydown', (event) => {
         const id = keyId(event);
         if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'space'].includes(id)) event.preventDefault();
         keys.add(id);
@@ -2154,7 +2206,13 @@
       window.addEventListener('blur', () => {
         keys.clear();
         mouseFire.active = false;
+        touchMove.x = 0;
+        touchMove.y = 0;
+        touchAim.x = 0;
+        touchAim.y = 0;
+        touchAim.active = false;
         touchAim.firing = false;
+        document.querySelectorAll('.joystick-thumb').forEach((thumb) => { thumb.style.transform = 'translate(0, 0)'; });
       });
       document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'playing') pauseGame(); });
       canvas.addEventListener('pointermove', (event) => {
@@ -2294,6 +2352,9 @@
   </script>
 </body>
 </html>
+
+
+
 
 
 

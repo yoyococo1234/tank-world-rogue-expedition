@@ -302,6 +302,24 @@
       .reward-card { padding: 15px; }
       .tips { display: none; }
     }
+    @media (orientation: portrait) and (max-width: 760px) {
+      .canvas-shell { overflow: visible; }
+      .overlay, .reward-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: block;
+        padding: 12px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+      .overlay-card, .reward-card {
+        width: min(100%, 620px);
+        max-height: none;
+        margin: 10px auto;
+      }
+      .mode-picker, .reward-options { grid-template-columns: 1fr; }
+    }
     @media (pointer: coarse) {
       .touch-controls { display: block; position: absolute; inset: 0; pointer-events: none; }
       .joystick { pointer-events: auto; }
@@ -2120,6 +2138,7 @@
   </script>
 </body>
 </html>
+
 
 
 

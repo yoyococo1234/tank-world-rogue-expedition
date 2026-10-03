@@ -227,6 +227,7 @@
     .reward-card h2 { margin: 3px 0 5px; font-size: clamp(23px, 4vw, 35px); letter-spacing: .06em; }
     .reward-card p { margin: 0 0 16px; color: #9cb2b3; font-size: 13px; }
     .reward-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .difficulty-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .reward-option {
       min-height: 126px;
       padding: 14px 12px;
@@ -299,7 +300,7 @@
       .hud-card { min-height: 50px; padding: 7px 9px; }
       .stat strong { font-size: 19px; }
       .health-number { font-size: 17px; }
-      .mode-picker, .reward-options { grid-template-columns: 1fr; }
+      .mode-picker, .reward-options, .difficulty-options { grid-template-columns: 1fr; }
       .mode-option { min-height: 64px; }
       .reward-card { padding: 15px; }
       .tips { display: none; }
@@ -320,7 +321,7 @@
         max-height: none;
         margin: 10px auto;
       }
-      .mode-picker, .reward-options { grid-template-columns: 1fr; }
+      .mode-picker, .reward-options, .difficulty-options { grid-template-columns: 1fr; }
     }
     @media (pointer: coarse) {
       .touch-controls { display: block; position: absolute; inset: 0; z-index: 4; pointer-events: none; touch-action: none; }
@@ -444,6 +445,7 @@
     body.force-landscape .reward-card h2 { font-size: 22px; }
     body.force-landscape .reward-card p { margin-bottom: 8px; font-size: 11px; }
     body.force-landscape .reward-options { grid-template-columns: repeat(3, 1fr); }
+    body.force-landscape .difficulty-options { grid-template-columns: repeat(2, 1fr); }
     body.force-landscape .reward-option { min-height: 88px; padding: 8px; }
     body.force-landscape .reward-icon { font-size: 18px; margin-bottom: 3px; }
     body.force-landscape .reward-option span { font-size: 10px; }
@@ -552,6 +554,15 @@
           <div class="reward-options" id="rewardOptions"></div>
         </div>
       </div>
+      <div class="reward-overlay" id="difficultyOverlay" role="dialog" aria-modal="true" aria-labelledby="difficultyTitle">
+        <div class="reward-card">
+          <span class="kicker">ROGUE DIFFICULTY</span>
+          <h2 id="difficultyTitle">选择肉鸽难度</h2>
+          <p>难度会整体调整敌方生命与伤害，不改变攻击成长和奖励规则。</p>
+          <div class="difficulty-options" id="difficultyOptions"></div>
+          <button class="secondary" id="difficultyBack" type="button" style="margin-top:12px">返回模式选择</button>
+        </div>
+      </div>
       <div class="touch-controls" id="touchControls" aria-hidden="true">
         <div class="joystick move" id="moveStick"><div class="joystick-thumb"></div><span class="joystick-label">移动</span></div>
         <div class="joystick aim" id="aimStick"><div class="joystick-thumb"></div><span class="joystick-label">瞄准 / 开火</span></div>
@@ -581,6 +592,9 @@
       const rewardOverlay = document.getElementById('rewardOverlay');
       const rewardWaveText = document.getElementById('rewardWaveText');
       const rewardOptions = document.getElementById('rewardOptions');
+      const difficultyOverlay = document.getElementById('difficultyOverlay');
+      const difficultyOptions = document.getElementById('difficultyOptions');
+      const difficultyBack = document.getElementById('difficultyBack');
       const secondaryButton = document.getElementById('secondaryButton');
       const soundToggle = document.getElementById('soundToggle');
       const fullscreenToggle = document.getElementById('fullscreenToggle');
@@ -651,6 +665,7 @@
       let boostModeEnabled = false;
       let boostLevel = 0;
       let selectedMode = 'normal';
+      let selectedRogueDifficulty = 'normal';
       let activeMode = 'normal';
       let boostReturnMode = 'normal';
       let rogue = {
@@ -879,11 +894,16 @@
           heavy: { radius: 27, speed: 82, hp: 176, fireRate: 1.72, damage: 15, color: '#9a5e52', accent: '#efb7a4', range: 450 }
         };
         const template = templates[type];
-        const roguePhase = activeMode === 'rogue' ? getRoguePhase(wave) : 'normal';
-        const phaseScale = roguePhase === 'mid' ? 1.35 : roguePhase === 'late' ? 1.75 : 1;
-        const damageScale = roguePhase === 'mid' ? 1.2 : roguePhase === 'late' ? 1.45 : 1;
-        const speedScale = roguePhase === 'mid' ? 1.08 : roguePhase === 'late' ? 1.15 : 1;
-        const hpScale = (1 + Math.max(0, wave - 1) * .055) * phaseScale;
+        const tierIndex = Math.floor(Math.max(0, wave - 1) / 10);
+        const cycleIndex = Math.max(0, wave - 1) % 10;
+        const tierScale = Math.pow(2, tierIndex);
+        const cycleScale = 1 + cycleIndex * .05;
+        const difficultyScale = activeMode === 'rogue' ? getRogueDifficultyMultiplier() : 1;
+        const hpScale = activeMode === 'rogue'
+          ? cycleScale * tierScale * difficultyScale
+          : 1 + Math.max(0, wave - 1) * .055;
+        const damageScale = activeMode === 'rogue' ? tierScale * difficultyScale : 1;
+        const speedScale = activeMode === 'rogue' ? 1 + cycleIndex * .015 + tierIndex * .05 : 1;
         let x = 0;
         let y = 0;
         let attempts = 0;
@@ -907,7 +927,13 @@
         });
       }
       function spawnBoss(waveNumber) {
-        const tier = Math.floor(waveNumber / 10);
+        const tierIndex = Math.floor((waveNumber - 1) / 10);
+        const cycle = (waveNumber - 1) % 10 + 1;
+        const tierScale = Math.pow(2, tierIndex);
+        const difficultyScale = getRogueDifficultyMultiplier();
+        const baseHp = 1500 + cycle * 170;
+        const baseDamage = 12 + cycle * .55;
+        const difficultySpeed = 1 + (difficultyScale - 1) * .05;
         enemies.push({
           id: ++enemyId,
           type: 'boss',
@@ -915,14 +941,14 @@
           x: WORLD.w / 2,
           y: 260,
           radius: 52,
-          speed: 62 + tier * 4,
+          speed: (62 + tierIndex * 4) * difficultySpeed,
           hullAngle: Math.PI / 2,
           turretAngle: Math.PI / 2,
-          hp: 1500 + waveNumber * 170,
-          maxHp: 1500 + waveNumber * 170,
+          hp: baseHp * tierScale * difficultyScale,
+          maxHp: baseHp * tierScale * difficultyScale,
           reload: 1.2,
-          fireRate: Math.max(.65, 1.15 - tier * .08),
-          damage: 13 + tier * 3,
+          fireRate: Math.max(.65, 1.15 - tierIndex * .08),
+          damage: baseDamage * tierScale * difficultyScale,
           range: 820,
           color: '#7d3f3b',
           accent: '#ffb08c',
@@ -1113,7 +1139,8 @@
             maxLife: weapon.life,
             kind: weapon.kind,
             color: playerBullet ? weapon.color : '#ff9a68',
-            wallPierce: playerBullet && activeMode === 'rogue' && rogue.wallPierce,
+            wallPierceLeft: playerBullet && activeMode === 'rogue' && rogue.wallPierce ? 1 : 0,
+            piercedCollider: null,
             pierceLeft: playerBullet && activeMode === 'rogue' ? rogue.enemyPierce : 0,
             chainLeft: playerBullet && weapon.kind === 'electric' ? 1 + (activeMode === 'rogue' ? rogue.chainTargets : 0) : 0,
             hitIds: new Set()
@@ -1293,7 +1320,7 @@
         return {
           damageMult: 1, reloadMult: 1, extraBarrels: 0, wallPierce: false,
           enemyPierce: 0, bulletSpeedMult: 1, bonusHeal: 0, bonusMaxHp: 0,
-          weapon: 'cannon', chainTargets: 0, flameSpread: 1
+          weapon: 'cannon', chainTargets: 0, flameSpread: 1, lifesteal: 0
         };
       }
       function getModeLabel(targetMode = activeMode) {
@@ -1301,17 +1328,64 @@
         if (targetMode === 'rogue') return `肉鸽 W${Math.max(1, wave)}`;
         return '普通';
       }
+      const ROGUE_DIFFICULTIES = [
+        { id: 'easy', title: '我是菜鸡', multiplier: .75, desc: '敌方生命与伤害 0.75 倍，适合熟悉机制。' },
+        { id: 'normal', title: '正常通关', multiplier: 1, desc: '标准数值，预计可完整体验 30 关。' },
+        { id: 'sweat', title: '想流点汗', multiplier: 3, desc: '敌方生命与伤害 3 倍，构筑要求明显提高。' },
+        { id: 'extreme', title: '极限难度', multiplier: 5, desc: '敌方生命与伤害 5 倍，前期容错极低。' }
+      ];
+      function getRogueDifficultyConfig() {
+        return ROGUE_DIFFICULTIES.find((item) => item.id === selectedRogueDifficulty) || ROGUE_DIFFICULTIES[1];
+      }
+      function getRogueDifficultyMultiplier() {
+        return getRogueDifficultyConfig().multiplier;
+      }
       function updateModePicker() {
         modeButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === selectedMode));
+        const difficulty = getRogueDifficultyConfig();
         const labels = { normal: '普通模式', boost: '增益模式', rogue: '肉鸽模式' };
         const notes = {
           normal: '标准战斗规则：不叠加击杀成长。',
           boost: '每次击杀成长；后期弹幕增多，可能卡顿。',
-          rogue: '每波三选一，10/20/30 关 Boss，通关目标 30 关。'
+          rogue: `每波三选一，10/20/30 关 Boss；难度：${difficulty.title}（${difficulty.multiplier} 倍）。`
         };
         modeNote.textContent = notes[selectedMode];
         primaryButton.textContent = `开始${labels[selectedMode]}`;
         updateHud();
+      }
+      function showDifficultySelection() {
+        mode = 'difficultySelect';
+        mouseFire.active = false;
+        touchAim.firing = false;
+        difficultyOptions.replaceChildren();
+        for (const difficulty of ROGUE_DIFFICULTIES) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'reward-option';
+          const title = document.createElement('strong');
+          title.textContent = difficulty.title;
+          const desc = document.createElement('span');
+          desc.textContent = difficulty.desc;
+          button.append(title, desc);
+          button.addEventListener('click', () => chooseRogueDifficulty(difficulty.id));
+          difficultyOptions.appendChild(button);
+        }
+        hideOverlay();
+        difficultyOverlay.classList.add('show');
+        document.body.classList.add('modal-open');
+      }
+      function chooseRogueDifficulty(id) {
+        selectedRogueDifficulty = id;
+        selectedMode = 'rogue';
+        difficultyOverlay.classList.remove('show');
+        if (!overlay.classList.contains('show')) document.body.classList.remove('modal-open');
+        updateModePicker();
+        showMainMenu();
+      }
+      function closeDifficultySelection() {
+        difficultyOverlay.classList.remove('show');
+        if (!overlay.classList.contains('show')) document.body.classList.remove('modal-open');
+        showMainMenu();
       }
       function showMainMenu() {
         mode = 'menu';
@@ -1327,6 +1401,10 @@
         });
       }
       function chooseMode(nextMode) {
+        if (nextMode === 'rogue') {
+          showDifficultySelection();
+          return;
+        }
         if (nextMode === 'boost') {
           boostReturnMode = selectedMode;
           showOverlay({
@@ -1361,7 +1439,7 @@
         { id: 'heal', icon: '✚', title: '维修模块', desc: '补给回血量增加 8。' },
         { id: 'lifesteal', icon: '♥', title: '吸血装甲', desc: '每击杀 1 个敌人回复 6 点生命，可叠加。' },
         { id: 'bulletSpeed', icon: '➤', title: '弹道加速', desc: '弹丸飞行速度提升 18%。' },
-        { id: 'pierceWall', icon: '◫', title: '穿墙弹', desc: '弹丸可以穿过墙壁和掩体。' },
+        { id: 'pierceWall', icon: '◫', title: '穿墙弹', desc: '弹丸可穿过 1 层墙；进入厚墙后可继续穿出。' },
         { id: 'pierceEnemy', icon: '↠', title: '贯穿弹', desc: '弹丸额外贯穿 1 个敌人。' },
         { id: 'weaponElectric', icon: 'ϟ', title: '电磁炮', desc: '切换为高速电磁弹，命中后连锁伤害附近敌人。' },
         { id: 'weaponFlame', icon: '♨', title: '喷火器', desc: '切换为短距离高射速火焰喷射。' },
@@ -1560,7 +1638,7 @@
             vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
             radius: 6, damage: boss.damage, owner: 'enemy', source: boss,
             life: 2.5, maxLife: 2.5, kind: 'bullet', color: '#ff7a59',
-            wallPierce: false, pierceLeft: 0, chainLeft: 0, hitIds: new Set()
+            wallPierceLeft: 0, piercedCollider: null, pierceLeft: 0, chainLeft: 0, hitIds: new Set()
           });
         }
         boss.reload = boss.fireRate;
@@ -1661,10 +1739,21 @@
           bullet.life -= dt;
           if (bullet.kind === 'flame') bullet.radius += dt * 12;
           let remove = bullet.life <= 0 || bullet.x < 0 || bullet.x > WORLD.w || bullet.y < 0 || bullet.y > WORLD.h;
+          if (bullet.piercedCollider && !circleRectCollision(bullet.x, bullet.y, bullet.radius, bullet.piercedCollider)) {
+            bullet.piercedCollider = null;
+          }
           if (!remove) {
             for (const collider of activeColliders()) {
               if (!circleRectCollision(bullet.x, bullet.y, bullet.radius, collider)) continue;
-              if (bullet.wallPierce) continue;
+              if (bullet.wallPierceLeft > 0) {
+                if (bullet.piercedCollider !== collider) {
+                  bullet.wallPierceLeft -= 1;
+                  bullet.piercedCollider = collider;
+                  spawnParticles(bullet.x, bullet.y, '#9ee7ff', 5, 70);
+                  audio.hit();
+                }
+                continue;
+              }
               if (collider.kind === 'crate') damageCrate(collider, bullet);
               else spawnParticles(bullet.x, bullet.y, '#bbc7b6', 5, 80);
               audio.hit();
@@ -2322,6 +2411,7 @@
       pauseToggle.addEventListener('click', togglePause);
       autoFireToggle.addEventListener('click', toggleAutoFire);
       modeButtons.forEach((button) => button.addEventListener('click', () => chooseMode(button.dataset.mode)));
+      difficultyBack.addEventListener('click', closeDifficultySelection);
       function syncForcedLandscape() {
         const portrait = matchMedia('(orientation: portrait)').matches;
         const touch = navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches;
@@ -2392,6 +2482,13 @@
   </script>
 </body>
 </html>
+
+
+
+
+
+
+
 
 
 

@@ -325,7 +325,7 @@
       .joystick { pointer-events: auto; }
       canvas { cursor: default; }
     }
-    @media (orientation: landscape) and (max-height: 560px) {
+    @media (min-aspect-ratio: 4 / 3) and (max-height: 620px) {
       html, body { height: 100%; overflow: hidden; }
       body { padding: 4px; align-items: start; }
       .game { height: calc(100dvh - 8px); padding: 7px; display: flex; flex-direction: column; border-radius: 14px; }
@@ -379,7 +379,8 @@
       <div class="actions">
 
         <button class="action assist" id="autoFireToggle" type="button" aria-label="切换自动开火" aria-pressed="false">自动开火 关</button>
-        <button class="action" id="fullscreenToggle" type="button" aria-label="切换全屏">全屏</button>
+        <button class="action exit" id="exitModeToggle" type="button" aria-label="退出当前模式">退出模式</button>
+        <button class="action" id="fullscreenToggle" type="button" aria-label="横屏全屏">横屏全屏</button>
         <button class="action" id="soundToggle" type="button" aria-label="切换音效">🔊 音效</button>
         <button class="action" id="pauseToggle" type="button" aria-label="暂停游戏">暂停</button>
       </div>
@@ -473,6 +474,8 @@
       const secondaryButton = document.getElementById('secondaryButton');
       const soundToggle = document.getElementById('soundToggle');
       const fullscreenToggle = document.getElementById('fullscreenToggle');
+      const exitModeToggle = document.getElementById('exitModeToggle');
+      let exitReturnMode = 'menu';
       const healthFill = document.getElementById('healthFill');
       const healthNumber = document.getElementById('healthNumber');
       const waveValue = document.getElementById('waveValue');
@@ -2087,33 +2090,78 @@
       });
       window.addEventListener('pointerup', (event) => { if (event.pointerType === 'mouse' && event.button === 0) mouseFire.active = false; });
       canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+      function requestExitMode() {
+        if (mode === 'menu' || mode === 'exitPrompt') return;
+        exitReturnMode = mode;
+        mouseFire.active = false;
+        touchAim.firing = false;
+        mode = 'exitPrompt';
+        showOverlay({
+          kicker: 'EXIT MODE',
+          title: '退出当前模式？',
+          text: '当前进度会结束并返回模式选择。普通、增益和肉鸽模式可以重新选择。',
+          button: '退出并返回',
+          primaryAction: 'exit-mode',
+          secondary: '继续游戏',
+          secondaryAction: 'cancel-exit'
+        });
+      }
+      function confirmExitMode() {
+        rewardOverlay.classList.remove('show');
+        selectedMode = activeMode;
+        activeMode = 'normal';
+        boostModeEnabled = false;
+        resetWorld();
+        showMainMenu();
+      }
+      function cancelExitMode() {
+        if (exitReturnMode === 'paused') {
+          mode = 'paused';
+          showOverlay({ kicker: 'BATTLE PAUSED', title: '战斗暂停', text: '战场已经冻结。按 P 或点击按钮继续战斗。', button: '继续战斗', primaryAction: 'resume' });
+          updatePauseButton();
+        } else {
+          mode = 'playing';
+          hideOverlay();
+          updatePauseButton();
+          lastTime = performance.now();
+        }
+      }
       primaryButton.addEventListener('click', () => {
         const action = primaryButton.dataset.action;
         if (action === 'enable-boost') enableBoostMode();
+        else if (action === 'exit-mode') confirmExitMode();
         else if (action === 'resume' || mode === 'paused') resumeGame();
-        else startGame();
+        else { startGame(); }
       });
       secondaryButton.addEventListener('click', () => {
         if (secondaryButton.dataset.action === 'cancel-boost') cancelBoostWarning();
+        if (secondaryButton.dataset.action === 'cancel-exit') cancelExitMode();
       });
+      exitModeToggle.addEventListener('click', requestExitMode);
       pauseToggle.addEventListener('click', togglePause);
       autoFireToggle.addEventListener('click', toggleAutoFire);
       modeButtons.forEach((button) => button.addEventListener('click', () => chooseMode(button.dataset.mode)));
-      async function toggleFullscreen() {
+      async function enterLandscapeFullscreen() {
+        if (navigator.maxTouchPoints <= 0 && !matchMedia('(pointer: coarse)').matches) return;
         try {
-          if (!document.fullscreenElement) {
-            if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
-            if (screen.orientation && screen.orientation.lock) {
-              try { await screen.orientation.lock('landscape'); } catch (_) {}
-            }
-          } else if (document.exitFullscreen) {
-            await document.exitFullscreen();
+          if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+          }
+          if (screen.orientation && screen.orientation.lock) {
+            try { await screen.orientation.lock('landscape'); } catch (_) {}
           }
         } catch (_) {}
-        fullscreenToggle.textContent = document.fullscreenElement ? '退出全屏' : '全屏';
+        fullscreenToggle.textContent = document.fullscreenElement ? '退出全屏' : '横屏全屏';
+      }
+      async function toggleFullscreen() {
+        try {
+          if (!document.fullscreenElement) await enterLandscapeFullscreen();
+          else if (document.exitFullscreen) await document.exitFullscreen();
+        } catch (_) {}
+        fullscreenToggle.textContent = document.fullscreenElement ? '退出全屏' : '横屏全屏';
       }
       document.addEventListener('fullscreenchange', () => {
-        fullscreenToggle.textContent = document.fullscreenElement ? '退出全屏' : '全屏';
+        fullscreenToggle.textContent = document.fullscreenElement ? '退出全屏' : '横屏全屏';
       });
       fullscreenToggle.addEventListener('click', toggleFullscreen);
       soundToggle.addEventListener('click', () => {
@@ -2138,6 +2186,8 @@
   </script>
 </body>
 </html>
+
+
 
 
 

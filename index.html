@@ -1329,10 +1329,10 @@
         return '普通';
       }
       const ROGUE_DIFFICULTIES = [
-        { id: 'easy', title: '我是菜鸡', multiplier: .75, desc: '敌方生命与伤害 0.75 倍，适合熟悉机制。' },
+        { id: 'easy', title: '我是菜鸡', multiplier: .5, desc: '敌方生命与伤害 0.5 倍，适合熟悉机制。' },
         { id: 'normal', title: '正常通关', multiplier: 1, desc: '标准数值，预计可完整体验 30 关。' },
-        { id: 'sweat', title: '想流点汗', multiplier: 3, desc: '敌方生命与伤害 3 倍，构筑要求明显提高。' },
-        { id: 'extreme', title: '极限难度', multiplier: 5, desc: '敌方生命与伤害 5 倍，前期容错极低。' }
+        { id: 'sweat', title: '想流点汗', multiplier: 1.5, desc: '敌方生命与伤害 1.5 倍，构筑要求明显提高。' },
+        { id: 'extreme', title: '极限难度', multiplier: 2, desc: '敌方生命与伤害 2 倍，前期容错很低。' }
       ];
       function getRogueDifficultyConfig() {
         return ROGUE_DIFFICULTIES.find((item) => item.id === selectedRogueDifficulty) || ROGUE_DIFFICULTIES[1];
@@ -2482,6 +2482,7 @@
   </script>
 </body>
 </html>
+
 
 
 

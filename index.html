@@ -240,6 +240,9 @@
       transition: transform .16s ease, border-color .16s ease, background .16s ease;
     }
     .reward-option:hover { transform: translateY(-3px); border-color: rgba(116, 212, 255, .55); background: rgba(116, 212, 255, .08); }
+    .reward-option.tier-large { border-color: rgba(246, 196, 83, .62); background: rgba(246, 196, 83, .09); }
+    .reward-option.tier-medium { border-color: rgba(116, 212, 255, .48); background: rgba(116, 212, 255, .07); }
+    .reward-option.tier-small { border-color: rgba(183, 239, 99, .42); background: rgba(183, 239, 99, .06); }
     .reward-icon { display: block; margin-bottom: 7px; font-size: 25px; }
     .reward-option strong { display: block; margin-bottom: 5px; color: #dfff8a; }
     .reward-option span { display: block; color: #9cb0a2; font-size: 12px; line-height: 1.5; }
@@ -1453,6 +1456,8 @@
         updateModePicker();
         startGame();
       }
+      const REWARD_TIER_FACTORS = { large: 2, medium: 4 / 3, small: 1 };
+      const REWARD_TIER_LABELS = { large: '大型', medium: '中型', small: '小型' };
       const REWARD_POOL = [
         { id: 'damage', icon: '✦', title: '火力强化', desc: '攻击力永久提升 15%。' },
         { id: 'fireRate', icon: '⟳', title: '快速装填', desc: '射击间隔缩短 10%。' },
@@ -1483,7 +1488,34 @@
           const j = Math.floor(Math.random() * (i + 1));
           [pool[i], pool[j]] = [pool[j], pool[i]];
         }
-        return pool.slice(0, 3);
+        const tiers = ['large', 'medium', 'small'];
+        return pool.slice(0, 3).map((reward, index) => ({
+          reward,
+          tier: tiers[index],
+          factor: REWARD_TIER_FACTORS[tiers[index]]
+        }));
+      }
+      function getDiscreteRewardAmount(id, tier, bossMultiplier = 1) {
+        const base = tier === 'large' ? 3 : tier === 'medium' ? 2 : 1;
+        return Math.max(1, base + (bossMultiplier > 1 ? 1 : 0));
+      }
+      function describeReward(id, tier, bossMultiplier = 1) {
+        const factor = REWARD_TIER_FACTORS[tier] * bossMultiplier;
+        const discrete = getDiscreteRewardAmount(id, tier, bossMultiplier);
+        if (id === 'damage') return `攻击力永久提升 ${Math.round(15 * factor)}%。`;
+        if (id === 'fireRate') return `射击间隔缩短 ${(10 * factor).toFixed(1)}%。`;
+        if (id === 'barrels') return `每次齐射增加 ${discrete} 发弹丸，最多 4 根炮管。`;
+        if (id === 'health') return `生命上限增加 ${Math.round(25 * factor)}，并立即恢复同等生命。`;
+        if (id === 'heal') return `补给回血量增加 ${Math.round(8 * factor)}。`;
+        if (id === 'lifesteal') return `每击杀 1 个敌人回复 ${Math.round(6 * factor)} 点生命，可叠加。`;
+        if (id === 'bulletSpeed') return `弹丸飞行速度提升 ${Math.round(18 * factor)}%。`;
+        if (id === 'pierceWall') return `弹丸可穿过 1 层墙；进入厚墙后可继续穿出${tier === 'large' ? '，并额外提升 15% 弹速' : tier === 'medium' ? '，并额外提升 8% 弹速' : '。'}`;
+        if (id === 'pierceEnemy') return `弹丸额外贯穿 ${discrete} 个敌人。`;
+        if (id === 'weaponElectric') return `切换为电磁炮${tier === 'large' ? '，攻击力额外提升 15%' : tier === 'medium' ? '，攻击力额外提升 8%' : ''}。`;
+        if (id === 'weaponFlame') return `切换为喷火器${tier === 'large' ? '，攻击力额外提升 15%' : tier === 'medium' ? '，攻击力额外提升 8%' : ''}。`;
+        if (id === 'chain') return `电磁弹额外连锁 ${discrete} 个目标。`;
+        if (id === 'flameSpread') return `火焰喷射范围提升 ${Math.round(25 * factor)}%。`;
+        return '';
       }
       function showRewardSelection() {
         mode = 'reward';
@@ -1494,27 +1526,28 @@
           ? `BOSS 已击毁，选择一项双倍强化进入下一波。`
           : `第 ${wave} 波结束，选择一项强化进入下一波。`;
         rewardOptions.replaceChildren();
-        for (const reward of pickRewards()) {
+        for (const choice of pickRewards()) {
+          const reward = choice.reward;
           const button = document.createElement('button');
           button.type = 'button';
-          button.className = 'reward-option';
+          button.className = `reward-option tier-${choice.tier}`;
           const icon = document.createElement('span');
           icon.className = 'reward-icon';
           icon.textContent = reward.icon;
           const title = document.createElement('strong');
-          title.textContent = reward.title;
+          title.textContent = `${REWARD_TIER_LABELS[choice.tier]} · ${reward.title}`;
           const desc = document.createElement('span');
-          desc.textContent = reward.desc;
+          desc.textContent = describeReward(reward.id, choice.tier, pendingRewardMultiplier);
           button.append(icon, title, desc);
-          button.addEventListener('click', () => chooseReward(reward));
+          button.addEventListener('click', () => chooseReward(choice));
           rewardOptions.appendChild(button);
         }
         document.body.classList.add('modal-open');
         rewardOverlay.classList.add('show');
         updatePauseButton();
       }
-      function chooseReward(reward) {
-        applyReward(reward.id, pendingRewardMultiplier);
+      function chooseReward(choice) {
+        applyReward(choice.reward.id, choice.factor, choice.tier, pendingRewardMultiplier);
         pendingRewardMultiplier = 1;
         rewardOverlay.classList.remove('show');
         if (!overlay.classList.contains('show')) document.body.classList.remove('modal-open');
@@ -1522,24 +1555,33 @@
         lastTime = performance.now();
         startWave();
       }
-      function applyReward(id, multiplier = 1) {
-        if (id === 'damage') rogue.damageMult *= 1 + .15 * multiplier;
-        if (id === 'fireRate') rogue.reloadMult *= Math.pow(.9, multiplier);
-        if (id === 'barrels') rogue.extraBarrels = Math.min(4, rogue.extraBarrels + Math.max(1, Math.round(multiplier)));
+      function applyReward(id, multiplier = 1, tier = 'small', bossMultiplier = 1) {
+        const totalMultiplier = multiplier * bossMultiplier;
+        const discrete = getDiscreteRewardAmount(id, tier, bossMultiplier);
+        if (id === 'damage') rogue.damageMult *= 1 + .15 * totalMultiplier;
+        if (id === 'fireRate') rogue.reloadMult *= Math.max(.25, 1 - .1 * totalMultiplier);
+        if (id === 'barrels') rogue.extraBarrels = Math.min(4, rogue.extraBarrels + discrete);
         if (id === 'health') {
-          const increase = 25 * multiplier;
+          const increase = 25 * totalMultiplier;
           rogue.bonusMaxHp += increase;
           player.hp = Math.min(player.maxHp + increase, player.hp + increase);
         }
-        if (id === 'heal') rogue.bonusHeal += 8 * multiplier;
-        if (id === 'lifesteal') rogue.lifesteal += 6 * multiplier;
-        if (id === 'bulletSpeed') rogue.bulletSpeedMult *= Math.pow(1.18, multiplier);
-        if (id === 'pierceWall') rogue.wallPierce = true;
-        if (id === 'pierceEnemy') rogue.enemyPierce = Math.min(3, rogue.enemyPierce + Math.ceil(multiplier));
-        if (id === 'weaponElectric') rogue.weapon = 'electric';
-        if (id === 'weaponFlame') rogue.weapon = 'flame';
-        if (id === 'chain') rogue.chainTargets = Math.min(3, rogue.chainTargets + Math.ceil(multiplier));
-        if (id === 'flameSpread') rogue.flameSpread = Math.min(2, rogue.flameSpread + .25 * multiplier);
+        if (id === 'heal') rogue.bonusHeal += 8 * totalMultiplier;
+        if (id === 'lifesteal') rogue.lifesteal += 6 * totalMultiplier;
+        if (id === 'bulletSpeed') rogue.bulletSpeedMult *= 1 + .18 * totalMultiplier;
+        if (id === 'pierceWall') {
+          rogue.wallPierce = true;
+          if (tier === 'large') rogue.bulletSpeedMult *= 1.15;
+          else if (tier === 'medium') rogue.bulletSpeedMult *= 1.08;
+        }
+        if (id === 'pierceEnemy') rogue.enemyPierce = Math.min(3, rogue.enemyPierce + discrete);
+        if (id === 'weaponElectric' || id === 'weaponFlame') {
+          rogue.weapon = id === 'weaponElectric' ? 'electric' : 'flame';
+          if (tier === 'large') rogue.damageMult *= 1.15;
+          else if (tier === 'medium') rogue.damageMult *= 1.08;
+        }
+        if (id === 'chain') rogue.chainTargets = Math.min(3, rogue.chainTargets + discrete);
+        if (id === 'flameSpread') rogue.flameSpread = Math.min(2, rogue.flameSpread + .25 * totalMultiplier);
         refreshPlayerStats();
         updateHud();
       }
@@ -2673,6 +2715,9 @@
   </script>
 </body>
 </html>
+
+
+
 
 
 

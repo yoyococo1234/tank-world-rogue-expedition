@@ -69,6 +69,8 @@
     .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
     .action.assist.active { color: #efffd3; border-color: rgba(183, 239, 99, .58); background: rgba(183, 239, 99, .15); box-shadow: 0 0 0 1px rgba(183, 239, 99, .12), 0 0 20px rgba(183, 239, 99, .12); }
     .action.boost.active { color: #fff2c7; border-color: rgba(246, 196, 83, .62); background: rgba(246, 196, 83, .16); box-shadow: 0 0 0 1px rgba(246, 196, 83, .12), 0 0 20px rgba(246, 196, 83, .14); }
+    .landscape-action-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .landscape-action-wrap span { color: #f6c453; font-size: 9px; line-height: 1; white-space: nowrap; }
     .action {
       border: 1px solid var(--line);
       border-radius: 11px;
@@ -445,6 +447,27 @@
     body.force-landscape .reward-option { min-height: 88px; padding: 8px; }
     body.force-landscape .reward-icon { font-size: 18px; margin-bottom: 3px; }
     body.force-landscape .reward-option span { font-size: 10px; }
+    body.force-landscape.modal-open .hud, body.force-landscape.modal-open .brand { opacity: 0; visibility: hidden; }
+    body.force-landscape .overlay, body.force-landscape .reward-overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 10px;
+      overflow: hidden;
+    }
+    body.force-landscape .overlay-card, body.force-landscape .reward-card {
+      width: min(84%, 720px);
+      min-height: 300px;
+      max-height: calc(100dvw - 20px);
+      margin: 0;
+      padding: 12px;
+      overflow-y: auto;
+    }
+    body.force-landscape .overlay-meta { display: none; }
+    body.force-landscape .overlay h2 { font-size: 27px; }
+    body.force-landscape .overlay p { max-width: 620px; margin: 6px auto 10px; line-height: 1.45; }
+    body.force-landscape .overlay-actions { gap: 8px; flex-wrap: wrap; }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
     }
@@ -464,7 +487,10 @@
 
         <button class="action assist" id="autoFireToggle" type="button" aria-label="切换自动开火" aria-pressed="false">自动开火 关</button>
         <button class="action exit" id="exitModeToggle" type="button" aria-label="退出当前模式">退出模式</button>
-        <button class="action" id="fullscreenToggle" type="button" aria-label="横屏全屏">横屏全屏</button>
+        <div class="landscape-action-wrap">
+          <button class="action" id="fullscreenToggle" type="button" aria-label="横屏全屏">横屏全屏</button>
+          <span>电脑端勿按</span>
+        </div>
         <button class="action" id="soundToggle" type="button" aria-label="切换音效">🔊 音效</button>
         <button class="action" id="pauseToggle" type="button" aria-label="暂停游戏">暂停</button>
       </div>
@@ -1224,6 +1250,7 @@
         mouseFire.active = false;
         touchAim.firing = false;
         rewardOverlay.classList.remove('show');
+        if (!overlay.classList.contains('show')) document.body.classList.remove('modal-open');
         showOverlay({
           kicker: 'CAMPAIGN COMPLETE',
           title: '三十关通关',
@@ -1244,7 +1271,10 @@
         });
         updatePauseButton();
       }
-      function hideOverlay() { overlay.classList.remove('show'); }
+      function hideOverlay() {
+        overlay.classList.remove('show');
+        if (!rewardOverlay.classList.contains('show')) document.body.classList.remove('modal-open');
+      }
       function showOverlay({ kicker, title, text, button, primaryAction = 'default', secondary = '', secondaryAction = '', showModes = false }) {
         overlayKicker.textContent = kicker;
         overlayTitle.textContent = title;
@@ -1256,6 +1286,7 @@
         secondaryButton.hidden = !secondary;
         modePicker.hidden = !showModes;
         modeNote.hidden = !showModes;
+        document.body.classList.add('modal-open');
         overlay.classList.add('show');
       }
       function createRogueState() {
@@ -1378,6 +1409,7 @@
           button.addEventListener('click', () => chooseReward(reward));
           rewardOptions.appendChild(button);
         }
+        document.body.classList.add('modal-open');
         rewardOverlay.classList.add('show');
         updatePauseButton();
       }
@@ -1385,6 +1417,7 @@
         applyReward(reward.id, pendingRewardMultiplier);
         pendingRewardMultiplier = 1;
         rewardOverlay.classList.remove('show');
+        if (!overlay.classList.contains('show')) document.body.classList.remove('modal-open');
         mode = 'playing';
         lastTime = performance.now();
         startWave();
@@ -2255,6 +2288,7 @@
       }
       function confirmExitMode() {
         rewardOverlay.classList.remove('show');
+        if (!overlay.classList.contains('show')) document.body.classList.remove('modal-open');
         selectedMode = activeMode;
         activeMode = 'normal';
         boostModeEnabled = false;
@@ -2314,6 +2348,7 @@
         window.setTimeout(syncForcedLandscape, 180);
       }
       async function toggleFullscreen() {
+        if (!document.body.classList.contains('force-landscape') && mode === 'playing') pauseGame();
         if (document.body.classList.contains('force-landscape')) {
           landscapeAssistRequested = false;
           syncForcedLandscape();
@@ -2357,6 +2392,9 @@
   </script>
 </body>
 </html>
+
+
+
 
 
 
